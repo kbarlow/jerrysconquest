@@ -1,4 +1,3 @@
-# filepath: jerrysconquest/main.py
 
 import sys
 import os
@@ -7,23 +6,20 @@ from src.player import Player
 from src.world import World, TILE_GRASS, TILE_WATER
 from src.enemy import Enemy
 
-class SwordProjectile:
-    """
-    Represents a disc projectile thrown by the player. Moves in a direction, then returns to the player.
-    """
-    TILE_SIZE: int = 32
 
-    def __init__(self, wx: int, wy: int, direction: str, max_range: int = 4):
-        self.wx: int = wx
-        self.wy: int = wy
-        self.direction: str = direction
-        self.range_left: int = max_range
-        self.active: bool = True
-        self.move_cooldown: int = 3  # frames between moves
-        self.move_timer: int = 0
-        self.returning: bool = False
-        self.player_ref: 'Player | None' = None  # Will be set when appended
-        # Use disc.png for all sword projectiles
+# --- SwordProjectile (Disc) ---
+class SwordProjectile:
+    TILE_SIZE = 32
+    def __init__(self, wx, wy, direction, max_range=4):
+        self.wx = wx
+        self.wy = wy
+        self.direction = direction
+        self.range_left = max_range
+        self.active = True
+        self.move_cooldown = 3
+        self.move_timer = 0
+        self.returning = False
+        self.player_ref = None
         base_dir = os.path.dirname(os.path.abspath(__file__))
         sprite_path = os.path.join(base_dir, 'assets', 'sprites', 'disc.png')
         if os.path.exists(sprite_path):
@@ -34,8 +30,7 @@ class SwordProjectile:
             self.image.fill((220, 220, 80))
         self.rect = pygame.Rect(0, 0, self.TILE_SIZE, self.TILE_SIZE)
 
-    def move(self) -> None:
-        """Move the projectile in its direction or return to the player."""
+    def move(self):
         if self.move_timer > 0:
             self.move_timer -= 1
             return
@@ -53,7 +48,6 @@ class SwordProjectile:
             if self.range_left <= 0:
                 self.returning = True
         else:
-            # Home back to player tile
             if self.player_ref is not None:
                 px = int(self.player_ref.x // self.TILE_SIZE)
                 py = int(self.player_ref.y // self.TILE_SIZE)
@@ -62,7 +56,6 @@ class SwordProjectile:
                 if dx == 0 and dy == 0:
                     self.active = False
                     return
-                # Move one step toward player (prioritize x if not zero)
                 if abs(dx) > abs(dy):
                     self.wx += 1 if dx > 0 else -1
                 elif dy != 0:
@@ -70,10 +63,45 @@ class SwordProjectile:
                 else:
                     self.wx += 1 if dx > 0 else -1
 
-    def draw(self, surface: pygame.Surface, tile_offset_x: int, tile_offset_y: int, screen: pygame.Surface) -> None:
-        """Draw the projectile on the screen if in view."""
+    def draw(self, surface, tile_offset_x, tile_offset_y, screen):
         sx = (self.wx - tile_offset_x) * self.TILE_SIZE
         sy = (self.wy - tile_offset_y) * self.TILE_SIZE
+        if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
+            surface.blit(self.image, (sx, sy))
+
+# --- OrbProjectile (Enemy Orb) ---
+class OrbProjectile:
+    TILE_SIZE = 32
+    SPEED = 1  # pixels per frame (balanced speed)
+    def __init__(self, wx, wy, player_ref):
+        self.x = wx * self.TILE_SIZE
+        self.y = wy * self.TILE_SIZE
+        self.player_ref = player_ref
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        sprite_path = os.path.join(base_dir, 'assets', 'sprites', 'orb.png')
+        if os.path.exists(sprite_path):
+            img = pygame.image.load(sprite_path).convert_alpha()
+            self.image = pygame.transform.smoothscale(img, (self.TILE_SIZE, self.TILE_SIZE))
+        else:
+            self.image = pygame.Surface((self.TILE_SIZE, self.TILE_SIZE), pygame.SRCALPHA)
+            self.image.fill((80, 200, 255))
+        self.rect = pygame.Rect(self.x, self.y, self.TILE_SIZE, self.TILE_SIZE)
+        self.active = True
+    def move(self):
+        px = self.player_ref.x + self.player_ref.rect.width // 2
+        py = self.player_ref.y + self.player_ref.rect.height // 2
+        cx = self.x + self.TILE_SIZE // 2
+        cy = self.y + self.TILE_SIZE // 2
+        dx = px - cx
+        dy = py - cy
+        dist = (dx ** 2 + dy ** 2) ** 0.5
+        if dist > 1e-2:
+            self.x += self.SPEED * dx / dist
+            self.y += self.SPEED * dy / dist
+        self.rect.topleft = (int(self.x), int(self.y))
+    def draw(self, surface, tile_offset_x, tile_offset_y, screen):
+        sx = int(self.x) - tile_offset_x * self.TILE_SIZE
+        sy = int(self.y) - tile_offset_y * self.TILE_SIZE
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             surface.blit(self.image, (sx, sy))
 
@@ -198,7 +226,7 @@ tile_images = {
 
 
 
-# World, player, and enemies setup
+orb_projectiles = []  # List of OrbProjectile
 
 world = World(chunk_size=8)
 # Find a grass tile near the center of the world to start the player
@@ -248,9 +276,12 @@ def draw_world(surface, player, enemies):
         sy = (wy - tile_offset_y) * TILE_SIZE
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             enemy.draw(surface, sx, sy)
-    # Draw sword projectiles
-    for proj in sword_projectiles:
-        proj.draw(surface, tile_offset_x, tile_offset_y, screen)
+    # Draw sword projectiles (player disc)
+    for disc in sword_projectiles:
+        disc.draw(surface, tile_offset_x, tile_offset_y, screen)
+    # Draw orb projectiles (enemy orbs)
+    for orb in orb_projectiles:
+        orb.draw(surface, tile_offset_x, tile_offset_y, screen)
     # Draw blood overlays
     for blood in blood_overlays:
         sx = (blood.wx - tile_offset_x) * TILE_SIZE
@@ -277,10 +308,36 @@ clock = pygame.time.Clock()
 
 
 import random
+import time
+import random
+
+# Track last shot time for each enemy
+enemy_orb_timers = {}  # (wx, wy): next_shot_time
 SPAWN_CHANCE = 0.01  # Chance per frame to spawn an enemy in view
 
 running = True
 while running:
+    # --- Disc defeats orbs: pass through and remove orb ---
+    for disc in sword_projectiles:
+        if not disc.active:
+            continue
+        for orb in list(orb_projectiles):
+            orb_wx = int(orb.x // orb.TILE_SIZE)
+            orb_wy = int(orb.y // orb.TILE_SIZE)
+            # Check if orb is within a 3x3 area centered on the disc
+            if abs(disc.wx - orb_wx) <= 1 and abs(disc.wy - orb_wy) <= 1:
+                orb_projectiles.remove(orb)
+    # --- Disc hits enemy: defeat monster, add blood overlay ---
+    for disc in sword_projectiles:
+        if not disc.active:
+            continue
+        for (wx, wy), enemy in list(enemies.items()):
+            # If disc is on same tile as enemy
+            if disc.wx == wx and disc.wy == wy:
+                blood_overlays.append(Blood(wx, wy))
+                del enemies[(wx, wy)]
+                disc.active = False
+                break
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -349,19 +406,39 @@ while running:
         if not (rx == px // TILE_SIZE and ry == py // TILE_SIZE) and (rx, ry) not in enemies:
             enemies[(rx, ry)] = Enemy(rx, ry)
 
-    # Move and resolve sword projectiles
-    for proj in sword_projectiles:
-        if not proj.active:
-            continue
-        # Check collision with enemy
-        if (proj.wx, proj.wy) in enemies:
-            blood_overlays.append(Blood(proj.wx, proj.wy))
-            del enemies[(proj.wx, proj.wy)]
-            proj.active = False
-        else:
-            proj.move()
-    # Remove inactive projectiles
-    sword_projectiles[:] = [p for p in sword_projectiles if p.active]
+
+
+    # Move sword projectiles (disc)
+    for disc in sword_projectiles:
+        if disc.active:
+            disc.move()
+    sword_projectiles[:] = [d for d in sword_projectiles if d.active]
+
+    # Move orb projectiles (enemy orbs)
+    for orb in orb_projectiles:
+        if orb.active:
+            orb.move()
+    orb_projectiles[:] = [o for o in orb_projectiles if o.active]
+
+
+
+    # Enemies shoot orbs at the player every 5-10 seconds, independently
+    now = time.time()
+    for (wx, wy), enemy in enemies.items():
+        key = (wx, wy)
+        if key not in enemy_orb_timers:
+            # Schedule first shot randomly in 5-10 seconds
+            enemy_orb_timers[key] = now + random.uniform(5, 10)
+        if now >= enemy_orb_timers[key]:
+            orb_projectiles.append(OrbProjectile(wx, wy, player))
+            # Schedule next shot
+            enemy_orb_timers[key] = now + random.uniform(5, 10)
+    # Remove inactive disc projectiles
+    sword_projectiles[:] = [d for d in sword_projectiles if d.active]
+    # Clean up timers for dead enemies
+    for key in list(enemy_orb_timers.keys()):
+        if key not in enemies:
+            del enemy_orb_timers[key]
 
     # Draw infinite world centered on player, with enemies and blood overlays
     draw_world(screen, player, enemies)
