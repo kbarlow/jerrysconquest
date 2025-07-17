@@ -6,18 +6,23 @@ import pygame
 from src.player import Player
 from src.world import World, TILE_GRASS, TILE_WATER
 from src.enemy import Enemy
+
 class SwordProjectile:
-    TILE_SIZE = 32
-    def __init__(self, wx, wy, direction, max_range=4):
-        self.wx = wx
-        self.wy = wy
-        self.direction = direction
-        self.range_left = max_range
-        self.active = True
-        self.move_cooldown = 3  # frames between moves
-        self.move_timer = 0
-        self.returning = False
-        self.player_ref = None  # Will be set when appended
+    """
+    Represents a disc projectile thrown by the player. Moves in a direction, then returns to the player.
+    """
+    TILE_SIZE: int = 32
+
+    def __init__(self, wx: int, wy: int, direction: str, max_range: int = 4):
+        self.wx: int = wx
+        self.wy: int = wy
+        self.direction: str = direction
+        self.range_left: int = max_range
+        self.active: bool = True
+        self.move_cooldown: int = 3  # frames between moves
+        self.move_timer: int = 0
+        self.returning: bool = False
+        self.player_ref: 'Player | None' = None  # Will be set when appended
         # Use disc.png for all sword projectiles
         base_dir = os.path.dirname(os.path.abspath(__file__))
         sprite_path = os.path.join(base_dir, 'assets', 'sprites', 'disc.png')
@@ -29,7 +34,8 @@ class SwordProjectile:
             self.image.fill((220, 220, 80))
         self.rect = pygame.Rect(0, 0, self.TILE_SIZE, self.TILE_SIZE)
 
-    def move(self):
+    def move(self) -> None:
+        """Move the projectile in its direction or return to the player."""
         if self.move_timer > 0:
             self.move_timer -= 1
             return
@@ -64,21 +70,26 @@ class SwordProjectile:
                 else:
                     self.wx += 1 if dx > 0 else -1
 
-    def draw(self, surface, tile_offset_x, tile_offset_y, screen):
+    def draw(self, surface: pygame.Surface, tile_offset_x: int, tile_offset_y: int, screen: pygame.Surface) -> None:
+        """Draw the projectile on the screen if in view."""
         sx = (self.wx - tile_offset_x) * self.TILE_SIZE
         sy = (self.wy - tile_offset_y) * self.TILE_SIZE
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             surface.blit(self.image, (sx, sy))
 
+
 class Blood:
-    TILE_SIZE = 32
-    def __init__(self, wx, wy):
-        self.wx = wx
-        self.wy = wy
+    """
+    Represents a blood overlay left behind when an enemy is defeated.
+    """
+    TILE_SIZE: int = 32
+
+    def __init__(self, wx: int, wy: int):
+        self.wx: int = wx
+        self.wy: int = wy
         # Use project root as base directory
         project_root = os.path.dirname(os.path.abspath(__file__))
         sprite_path = os.path.join(project_root, 'assets', 'sprites', 'blood.png')
-        print(f"[DEBUG] Looking for blood.png at: {sprite_path}")
         print(f"[DEBUG] Looking for blood.png at: {sprite_path}")
         if os.path.exists(sprite_path):
             print("[DEBUG] blood.png found.")
@@ -94,7 +105,9 @@ class Blood:
             self.image = pygame.Surface((self.TILE_SIZE, self.TILE_SIZE), pygame.SRCALPHA)
             self.image.fill((200, 0, 0))
         self.rect = self.image.get_rect()
-    def draw(self, surface, screen_x, screen_y):
+
+    def draw(self, surface: pygame.Surface, screen_x: int, screen_y: int) -> None:
+        """Draw the blood overlay at the given screen coordinates."""
         self.rect.topleft = (screen_x, screen_y)
         surface.blit(self.image, self.rect)
 

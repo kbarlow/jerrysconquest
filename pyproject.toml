@@ -1,0 +1,10 @@
+[tool.black]
+line-length = 88
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+
+[flake8]
+max-line-length = 88
+exclude = __pycache__,env,build,dist,*.egg-info,.git,.vscode,.idea
