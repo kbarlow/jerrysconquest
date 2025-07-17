@@ -2,6 +2,17 @@ import pygame
 import os
 
 class Player:
+    def set_position(self, x, y):
+        """Set player position and update rect."""
+        self.x = x
+        self.y = y
+        self.rect.topleft = (self.x, self.y)
+
+    def move(self, dx, dy):
+        """Move player by (dx, dy) and update rect."""
+        self.x += dx
+        self.y += dy
+        self.rect.topleft = (self.x, self.y)
     def __init__(self, x, y, speed=2):
         self.x = x
         self.y = y
@@ -51,9 +62,7 @@ class Player:
         if dx != 0 and dy != 0:
             dx *= 0.7071
             dy *= 0.7071
-        self.x += dx * self.speed
-        self.y += dy * self.speed
-        self.rect.topleft = (self.x, self.y)
+        self.move(dx * self.speed, dy * self.speed)
         # Track last direction
         if dir_pressed:
             self.last_dir = dir_pressed

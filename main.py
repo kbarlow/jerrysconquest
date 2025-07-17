@@ -253,39 +253,45 @@ VIEW_TILES_Y = screen.get_height() // TILE_SIZE
 
 # Map rendering function for infinite world
 def draw_world(surface, player, enemies):
-    # Center the view on the player
-    px, py = int(player.x), int(player.y)
-    tile_offset_x = px // TILE_SIZE - VIEW_TILES_X // 2
-    tile_offset_y = py // TILE_SIZE - VIEW_TILES_Y // 2
+    # Camera offset: center player on screen
+    camera_x = player.x - screen.get_width() // 2 + player.TILE_SIZE // 2
+    camera_y = player.y - screen.get_height() // 2 + player.TILE_SIZE // 2
     # Draw terrain with random tile variations
     for y in range(VIEW_TILES_Y + 2):
         for x in range(VIEW_TILES_X + 2):
-            wx = tile_offset_x + x
-            wy = tile_offset_y + y
+            wx = int(camera_x // TILE_SIZE) + x
+            wy = int(camera_y // TILE_SIZE) + y
             tile = world.get_tile(wx, wy)
             variants = tile_images.get(tile)
             if variants:
-                # Use a deterministic random seed for consistent look per tile
                 seed = f"{wx},{wy},{tile}"
                 rnd = random.Random(seed)
                 img = variants[rnd.randint(0, len(variants)-1)]
-                surface.blit(img, (x * TILE_SIZE, y * TILE_SIZE))
+                sx = wx * TILE_SIZE - camera_x
+                sy = wy * TILE_SIZE - camera_y
+                surface.blit(img, (sx, sy))
     # Draw enemies
     for (wx, wy), enemy in enemies.items():
-        sx = (wx - tile_offset_x) * TILE_SIZE
-        sy = (wy - tile_offset_y) * TILE_SIZE
+        sx = wx * TILE_SIZE - camera_x
+        sy = wy * TILE_SIZE - camera_y
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             enemy.draw(surface, sx, sy)
     # Draw sword projectiles (player disc)
     for disc in sword_projectiles:
-        disc.draw(surface, tile_offset_x, tile_offset_y, screen)
+        sx = disc.wx * disc.TILE_SIZE - camera_x
+        sy = disc.wy * disc.TILE_SIZE - camera_y
+        if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
+            surface.blit(disc.image, (sx, sy))
     # Draw orb projectiles (enemy orbs)
     for orb in orb_projectiles:
-        orb.draw(surface, tile_offset_x, tile_offset_y, screen)
+        sx = int(orb.x) - camera_x
+        sy = int(orb.y) - camera_y
+        if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
+            surface.blit(orb.image, (sx, sy))
     # Draw blood overlays
     for blood in blood_overlays:
-        sx = (blood.wx - tile_offset_x) * TILE_SIZE
-        sy = (blood.wy - tile_offset_y) * TILE_SIZE
+        sx = blood.wx * TILE_SIZE - camera_x
+        sy = blood.wy * TILE_SIZE - camera_y
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             blood.draw(surface, sx, sy)
 
@@ -317,6 +323,20 @@ SPAWN_CHANCE = 0.01  # Chance per frame to spawn an enemy in view
 
 running = True
 while running:
+
+    # --- Game over if orb touches player (distance-based) ---
+    # --- Game over if orb collides with player (bounding box, world coords) ---
+    player.rect.topleft = (player.x, player.y)
+    for orb in orb_projectiles:
+        if orb.rect.colliderect(player.rect):
+            font = pygame.font.SysFont('Arial', 64, bold=True)
+            text = font.render('GAME OVER', True, (255, 0, 0))
+            text_rect = text.get_rect(center=(screen.get_width()//2, screen.get_height()//2))
+            screen.blit(text, text_rect)
+            pygame.display.flip()
+            pygame.time.wait(2000)
+            show_splash()
+            os.execv(sys.executable, ['python3'] + sys.argv)
     # --- Disc defeats orbs: pass through and remove orb ---
     for disc in sword_projectiles:
         if not disc.active:
@@ -388,12 +408,8 @@ while running:
     if dx != 0 and dy != 0:
         dx *= 0.7071
         dy *= 0.7071
-    new_x = player.x + dx * player.speed
-    new_y = player.y + dy * player.speed
     # No collision: always allow movement
-    player.x = new_x
-    player.y = new_y
-    player.rect.topleft = (player.x, player.y)
+    player.move(dx * player.speed, dy * player.speed)
 
     # Randomly spawn enemies in view
     if random.random() < SPAWN_CHANCE:
@@ -444,10 +460,21 @@ while running:
     draw_world(screen, player, enemies)
     # Draw player on top (centered)
 
+    # Draw world and player with camera offset
+    draw_world(screen, player, enemies)
+    # Draw player centered on screen
     player_screen_x = screen.get_width() // 2
     player_screen_y = screen.get_height() // 2
-    player.rect.topleft = (player_screen_x, player_screen_y)
-    player.draw(screen)
+    screen.blit(player.image, (player_screen_x, player_screen_y))
+    if player.sword_active and player.sword_dir in player.sword_images:
+        offset = {
+            'right': (player.TILE_SIZE, 0),
+            'left': (-player.TILE_SIZE, 0),
+            'up': (0, -player.TILE_SIZE),
+            'down': (0, player.TILE_SIZE)
+        }[player.sword_dir]
+        sword_rect = pygame.Rect(player_screen_x + offset[0], player_screen_y + offset[1], player.TILE_SIZE, player.TILE_SIZE)
+        screen.blit(player.sword_images[player.sword_dir], sword_rect)
     pygame.display.flip()
     clock.tick(60)
 
