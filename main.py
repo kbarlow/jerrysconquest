@@ -10,13 +10,13 @@ from src.enemy import Enemy
 # --- SwordProjectile (Disc) ---
 class SwordProjectile:
     TILE_SIZE = 32
-    def __init__(self, wx, wy, direction, max_range=4):
-        self.wx = wx
-        self.wy = wy
+    def __init__(self, x, y, direction, max_range=4):
+        self.x = x  # pixel position
+        self.y = y
         self.direction = direction
-        self.range_left = max_range
+        self.range_left = max_range * self.TILE_SIZE  # range in pixels
         self.active = True
-        self.move_cooldown = 3
+        self.move_cooldown = 0  # not needed for pixel movement
         self.move_timer = 0
         self.returning = False
         self.player_ref = None
@@ -28,44 +28,40 @@ class SwordProjectile:
         else:
             self.image = pygame.Surface((self.TILE_SIZE, self.TILE_SIZE), pygame.SRCALPHA)
             self.image.fill((220, 220, 80))
-        self.rect = pygame.Rect(0, 0, self.TILE_SIZE, self.TILE_SIZE)
+        self.rect = pygame.Rect(self.x, self.y, self.TILE_SIZE, self.TILE_SIZE)
+        self.speed = 8  # pixels per frame
 
     def move(self):
-        if self.move_timer > 0:
-            self.move_timer -= 1
-            return
-        self.move_timer = self.move_cooldown
         if not self.returning:
             if self.direction == 'right':
-                self.wx += 1
+                self.x += self.speed
             elif self.direction == 'left':
-                self.wx -= 1
+                self.x -= self.speed
             elif self.direction == 'up':
-                self.wy -= 1
+                self.y -= self.speed
             elif self.direction == 'down':
-                self.wy += 1
-            self.range_left -= 1
+                self.y += self.speed
+            self.range_left -= self.speed
             if self.range_left <= 0:
                 self.returning = True
         else:
             if self.player_ref is not None:
-                px = int(self.player_ref.x // self.TILE_SIZE)
-                py = int(self.player_ref.y // self.TILE_SIZE)
-                dx = px - self.wx
-                dy = py - self.wy
-                if dx == 0 and dy == 0:
+                px = self.player_ref.x + self.player_ref.rect.width // 2
+                py = self.player_ref.y + self.player_ref.rect.height // 2
+                dx = px - (self.x + self.TILE_SIZE // 2)
+                dy = py - (self.y + self.TILE_SIZE // 2)
+                dist = (dx ** 2 + dy ** 2) ** 0.5
+                if dist < self.speed:
                     self.active = False
                     return
-                if abs(dx) > abs(dy):
-                    self.wx += 1 if dx > 0 else -1
-                elif dy != 0:
-                    self.wy += 1 if dy > 0 else -1
-                else:
-                    self.wx += 1 if dx > 0 else -1
+                if dist > 0:
+                    self.x += self.speed * dx / dist
+                    self.y += self.speed * dy / dist
+        self.rect.topleft = (int(self.x), int(self.y))
 
     def draw(self, surface, tile_offset_x, tile_offset_y, screen):
-        sx = (self.wx - tile_offset_x) * self.TILE_SIZE
-        sy = (self.wy - tile_offset_y) * self.TILE_SIZE
+        sx = int(self.x) - tile_offset_x * self.TILE_SIZE
+        sy = int(self.y) - tile_offset_y * self.TILE_SIZE
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             surface.blit(self.image, (sx, sy))
 
@@ -278,8 +274,8 @@ def draw_world(surface, player, enemies):
             enemy.draw(surface, sx, sy)
     # Draw sword projectiles (player disc)
     for disc in sword_projectiles:
-        sx = disc.wx * disc.TILE_SIZE - camera_x
-        sy = disc.wy * disc.TILE_SIZE - camera_y
+        sx = int(disc.x) - camera_x
+        sy = int(disc.y) - camera_y
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
             surface.blit(disc.image, (sx, sy))
     # Draw orb projectiles (enemy orbs)
@@ -342,18 +338,18 @@ while running:
         if not disc.active:
             continue
         for orb in list(orb_projectiles):
-            orb_wx = int(orb.x // orb.TILE_SIZE)
-            orb_wy = int(orb.y // orb.TILE_SIZE)
-            # Check if orb is within a 3x3 area centered on the disc
-            if abs(disc.wx - orb_wx) <= 1 and abs(disc.wy - orb_wy) <= 1:
+            # Check if orb is within a 3x3 area centered on the disc (pixel-based)
+            if abs((disc.x + disc.TILE_SIZE//2) - (orb.x + orb.TILE_SIZE//2)) <= disc.TILE_SIZE and \
+               abs((disc.y + disc.TILE_SIZE//2) - (orb.y + orb.TILE_SIZE//2)) <= disc.TILE_SIZE:
                 orb_projectiles.remove(orb)
     # --- Disc hits enemy: defeat monster, add blood overlay ---
     for disc in sword_projectiles:
         if not disc.active:
             continue
         for (wx, wy), enemy in list(enemies.items()):
-            # If disc is on same tile as enemy
-            if disc.wx == wx and disc.wy == wy:
+            # If disc overlaps enemy (pixel-based)
+            enemy_rect = pygame.Rect(wx * TILE_SIZE, wy * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+            if enemy_rect.colliderect(disc.rect):
                 blood_overlays.append(Blood(wx, wy))
                 del enemies[(wx, wy)]
                 disc.active = False
@@ -379,16 +375,10 @@ while running:
                 dir = player.last_dir
             else:
                 player.last_dir = dir
-            # Start projectile at tile in front of player
-            if dir == 'right':
-                tx += 1
-            elif dir == 'left':
-                tx -= 1
-            elif dir == 'up':
-                ty -= 1
-            elif dir == 'down':
-                ty += 1
-            proj = SwordProjectile(tx, ty, dir, max_range=4)
+            # Start projectile at center of player
+            px_center = player.x + player.rect.width // 2 - TILE_SIZE // 2
+            py_center = player.y + player.rect.height // 2 - TILE_SIZE // 2
+            proj = SwordProjectile(px_center, py_center, dir, max_range=4)
             proj.player_ref = player
             sword_projectiles.append(proj)
 
