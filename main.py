@@ -352,8 +352,6 @@ while running:
             if enemy_rect.colliderect(disc.rect):
                 blood_overlays.append(Blood(wx, wy))
                 del enemies[(wx, wy)]
-                disc.active = False
-                break
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
