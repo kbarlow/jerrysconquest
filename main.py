@@ -253,9 +253,25 @@ for dy in range(-2, 3):
     else:
         continue
     break
+
+# --- Load both player sprites for animation ---
+base_dir = os.path.dirname(os.path.abspath(__file__))
+sprite1_path = os.path.join(base_dir, 'assets', 'sprites', 'Player.png')
+sprite2_path = os.path.join(base_dir, 'assets', 'sprites', 'Player2.png')
+def load_player_image(path):
+    if os.path.exists(path):
+        img = pygame.image.load(path).convert_alpha()
+        return pygame.transform.smoothscale(img, (TILE_SIZE, TILE_SIZE))
+    else:
+        surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        surf.fill((255, 0, 255))
+        return surf
+player_images = [load_player_image(sprite1_path), load_player_image(sprite2_path)]
 player = Player(center_tile_x * TILE_SIZE, center_tile_y * TILE_SIZE)
-# Add health attribute to player
 player.health = MAX_HEALTH
+player.animation_frame = 0
+player.animation_timer = 0
+player.animation_interval = 10  # frames between swaps
 enemies = {}  # Dict[(wx, wy)] = Enemy
 blood_overlays = []  # Blood overlays
 sword_projectiles = []  # List of SwordProjectile
@@ -529,10 +545,26 @@ while running:
     # Draw infinite world centered on player, with enemies and blood overlays
     draw_world(screen, player, enemies)
 
-    # Draw player centered on screen
+
+    # Animate player sprite only when moving
+    keys = pygame.key.get_pressed()
+    moving = (
+        keys[pygame.K_LEFT] or keys[pygame.K_a] or
+        keys[pygame.K_RIGHT] or keys[pygame.K_d] or
+        keys[pygame.K_UP] or keys[pygame.K_w] or
+        keys[pygame.K_DOWN] or keys[pygame.K_s]
+    )
+    if moving:
+        player.animation_timer += 1
+        if player.animation_timer >= player.animation_interval:
+            player.animation_timer = 0
+            player.animation_frame = (player.animation_frame + 1) % len(player_images)
+    else:
+        player.animation_frame = 0
+        player.animation_timer = 0
     player_screen_x = screen.get_width() // 2
     player_screen_y = screen.get_height() // 2
-    screen.blit(player.image, (player_screen_x, player_screen_y))
+    screen.blit(player_images[player.animation_frame], (player_screen_x, player_screen_y))
     if player.sword_active and player.sword_dir in player.sword_images:
         offset = {
             'right': (player.TILE_SIZE, 0),
