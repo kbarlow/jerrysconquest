@@ -13,6 +13,7 @@ class SwordProjectile:
     def __init__(self, x, y, direction, max_range=4):
         self.x = x  # pixel position
         self.y = y
+        # direction is now a (dx, dy) tuple, normalized
         self.direction = direction
         self.range_left = max_range * self.TILE_SIZE  # range in pixels
         self.active = True
@@ -33,14 +34,9 @@ class SwordProjectile:
 
     def move(self):
         if not self.returning:
-            if self.direction == 'right':
-                self.x += self.speed
-            elif self.direction == 'left':
-                self.x -= self.speed
-            elif self.direction == 'up':
-                self.y -= self.speed
-            elif self.direction == 'down':
-                self.y += self.speed
+            dx, dy = self.direction
+            self.x += self.speed * dx
+            self.y += self.speed * dy
             self.range_left -= self.speed
             if self.range_left <= 0:
                 self.returning = True
@@ -356,27 +352,36 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            # Fire sword projectile in direction of currently held key, else last_dir
-            px, py = int(player.x), int(player.y)
-            tx, ty = px // TILE_SIZE, py // TILE_SIZE
+            # Fire sword projectile in direction of currently held key(s), else last_dir
             keys = pygame.key.get_pressed()
-            dir = None
+            dx, dy = 0, 0
             if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                dir = 'right'
-            elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                dir = 'left'
-            elif keys[pygame.K_UP] or keys[pygame.K_w]:
-                dir = 'up'
-            elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                dir = 'down'
-            if dir is None:
+                dx += 1
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                dx -= 1
+            if keys[pygame.K_UP] or keys[pygame.K_w]:
+                dy -= 1
+            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                dy += 1
+            # Normalize diagonal
+            if dx != 0 and dy != 0:
+                dx *= 0.7071
+                dy *= 0.7071
+            if dx == 0 and dy == 0:
+                # No direction pressed, use last_dir
                 dir = player.last_dir
-            else:
-                player.last_dir = dir
+                # Map last_dir to dx, dy
+                dir_map = {'right': (1, 0), 'left': (-1, 0), 'up': (0, -1), 'down': (0, 1)}
+                dx, dy = dir_map.get(dir, (1, 0))
+            # Save last_dir for cardinal only
+            if abs(dx) > abs(dy):
+                player.last_dir = 'right' if dx > 0 else 'left'
+            elif abs(dy) > abs(dx):
+                player.last_dir = 'down' if dy > 0 else 'up'
             # Start projectile at center of player
             px_center = player.x + player.rect.width // 2 - TILE_SIZE // 2
             py_center = player.y + player.rect.height // 2 - TILE_SIZE // 2
-            proj = SwordProjectile(px_center, py_center, dir, max_range=4)
+            proj = SwordProjectile(px_center, py_center, (dx, dy), max_range=4)
             proj.player_ref = player
             sword_projectiles.append(proj)
 
