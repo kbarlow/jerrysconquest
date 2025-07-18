@@ -279,8 +279,25 @@ sword_projectiles = []  # List of SwordProjectile
 VIEW_TILES_X = screen.get_width() // TILE_SIZE
 VIEW_TILES_Y = screen.get_height() // TILE_SIZE
 
-# Map rendering function for infinite world
+
+# --- Load both monster sprites for animation ---
+monster1_path = os.path.join(base_dir, 'assets', 'sprites', 'monster1.png')
+monster2_path = os.path.join(base_dir, 'assets', 'sprites', 'monster2.png')
+def load_monster_image(path):
+    if os.path.exists(path):
+        img = pygame.image.load(path).convert_alpha()
+        return pygame.transform.smoothscale(img, (TILE_SIZE, TILE_SIZE))
+    else:
+        surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        surf.fill((0, 255, 0))
+        return surf
+monster_images = [load_monster_image(monster1_path), load_monster_image(monster2_path)]
+monster_animation_frame = 0
+monster_animation_timer = 0
+monster_animation_interval = 10  # frames between swaps
+
 def draw_world(surface, player, enemies):
+    global monster_animation_frame, monster_animation_timer
     # Camera offset: center player on screen
     camera_x = player.x - screen.get_width() // 2 + player.TILE_SIZE // 2
     camera_y = player.y - screen.get_height() // 2 + player.TILE_SIZE // 2
@@ -298,12 +315,17 @@ def draw_world(surface, player, enemies):
                 sx = wx * TILE_SIZE - camera_x
                 sy = wy * TILE_SIZE - camera_y
                 surface.blit(img, (sx, sy))
-    # Draw enemies
+    # Animate monster sprites globally
+    monster_animation_timer += 1
+    if monster_animation_timer >= monster_animation_interval:
+        monster_animation_timer = 0
+        monster_animation_frame = (monster_animation_frame + 1) % len(monster_images)
+    # Draw enemies with animated sprite
     for (wx, wy), enemy in enemies.items():
         sx = wx * TILE_SIZE - camera_x
         sy = wy * TILE_SIZE - camera_y
         if 0 <= sx < screen.get_width() and 0 <= sy < screen.get_height():
-            enemy.draw(surface, sx, sy)
+            surface.blit(monster_images[monster_animation_frame], (sx, sy))
     # Draw sword projectiles (player disc)
     for disc in sword_projectiles:
         sx = int(disc.x) - camera_x
