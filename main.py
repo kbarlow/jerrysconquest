@@ -358,6 +358,7 @@ while running:
     debug_log(f"[PLAYER] Location: x={player.x:.2f}, y={player.y:.2f}, screen=({screen.get_width()}x{screen.get_height()})")
     # Only reduce health once per orb hit, and only if not already in invulnerable state
     orb_hit = False
+    orbs_to_remove = []
     for orb in orb_projectiles:
         orb.rect.topleft = (int(orb.x), int(orb.y))
         orb_hitbox = pygame.Rect(
@@ -368,7 +369,7 @@ while running:
         debug_log(f"[ORB] Location: x={orb.x:.2f}, y={orb.y:.2f}")
         if player_hitbox.colliderect(orb_hitbox):
             orb_hit = True
-            break
+            orbs_to_remove.append(orb)
     # Only reduce health if an orb hit is detected and player was not already hit in the previous frame
     if not hasattr(player, 'was_hit_last_frame'):
         player.was_hit_last_frame = False
@@ -385,6 +386,10 @@ while running:
             show_splash()
             os.execv(sys.executable, ['python3'] + sys.argv)
     player.was_hit_last_frame = orb_hit
+    # Remove orbs that hit the player
+    for orb in orbs_to_remove:
+        if orb in orb_projectiles:
+            orb_projectiles.remove(orb)
     # --- Disc defeats orbs: pass through and remove orb ---
     for disc in sword_projectiles:
         if not disc.active:
