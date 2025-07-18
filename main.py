@@ -349,35 +349,50 @@ while running:
                 blood_overlays.append(Blood(wx, wy))
                 del enemies[(wx, wy)]
     for event in pygame.event.get():
+        print(f"[EVENT] type={event.type} key={getattr(event, 'key', None)}")
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_x:
             # Fire sword projectile in direction of currently held key(s), else last_dir
             keys = pygame.key.get_pressed()
             dx, dy = 0, 0
-            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                dx += 1
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                dx -= 1
-            if keys[pygame.K_UP] or keys[pygame.K_w]:
-                dy -= 1
-            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                dy += 1
+            right = keys[pygame.K_RIGHT] or keys[pygame.K_d]
+            left = keys[pygame.K_LEFT] or keys[pygame.K_a]
+            up = keys[pygame.K_UP] or keys[pygame.K_w]
+            down = keys[pygame.K_DOWN] or keys[pygame.K_s]
+            xfire = keys[pygame.K_x]
+            # Log for debugging
+            print(f"[DISC TOSS] xfire={xfire} right={right} left={left} up={up} down={down}")
+            if right and not left:
+                dx = 1
+            if left and not right:
+                dx = -1
+            if down and not up:
+                dy = 1
+            if up and not down:
+                dy = -1
             # Normalize diagonal
             if dx != 0 and dy != 0:
                 dx *= 0.7071
                 dy *= 0.7071
+            # Logging for debugging
+            print(f"[DISC TOSS] Keys: right={right}, left={left}, up={up}, down={down} | dx={dx}, dy={dy}")
             if dx == 0 and dy == 0:
                 # No direction pressed, use last_dir
                 dir = player.last_dir
-                # Map last_dir to dx, dy
                 dir_map = {'right': (1, 0), 'left': (-1, 0), 'up': (0, -1), 'down': (0, 1)}
                 dx, dy = dir_map.get(dir, (1, 0))
-            # Save last_dir for cardinal only
-            if abs(dx) > abs(dy):
-                player.last_dir = 'right' if dx > 0 else 'left'
-            elif abs(dy) > abs(dx):
-                player.last_dir = 'down' if dy > 0 else 'up'
+                print(f"[DISC TOSS] No direction pressed, using last_dir={dir} -> dx={dx}, dy={dy}")
+            # Only update last_dir if a single cardinal direction is pressed
+            if (dx == 1 and dy == 0):
+                player.last_dir = 'right'
+            elif (dx == -1 and dy == 0):
+                player.last_dir = 'left'
+            elif (dx == 0 and dy == -1):
+                player.last_dir = 'up'
+            elif (dx == 0 and dy == 1):
+                player.last_dir = 'down'
+            print(f"[DISC TOSS] Final direction: ({dx}, {dy})")
             # Start projectile at center of player
             px_center = player.x + player.rect.width // 2 - TILE_SIZE // 2
             py_center = player.y + player.rect.height // 2 - TILE_SIZE // 2
