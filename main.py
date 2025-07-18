@@ -4,12 +4,21 @@ def debug_log(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
 
+
 import sys
 import os
 import pygame
 from src.player import Player
 from src.world import World, TILE_GRASS, TILE_WATER
 from src.enemy import Enemy
+
+# --- Health Bar Settings ---
+MAX_HEALTH = 100
+HEALTH_BAR_WIDTH = 200
+HEALTH_BAR_HEIGHT = 24
+HEALTH_BAR_MARGIN = 16
+HEALTH_BAR_COLOR = (200, 0, 0)
+HEALTH_BAR_BG = (0, 0, 0)
 
 
 HITBOX_OFFSET_X = 16  # pixels to the right for visual fairness
@@ -245,6 +254,8 @@ for dy in range(-2, 3):
         continue
     break
 player = Player(center_tile_x * TILE_SIZE, center_tile_y * TILE_SIZE)
+# Add health attribute to player
+player.health = MAX_HEALTH
 enemies = {}  # Dict[(wx, wy)] = Enemy
 blood_overlays = []  # Blood overlays
 sword_projectiles = []  # List of SwordProjectile
@@ -322,18 +333,31 @@ import random
 enemy_orb_timers = {}  # (wx, wy): next_shot_time
 SPAWN_CHANCE = 0.01  # Chance per frame to spawn an enemy in view
 
+
+def draw_health_bar(surface, health):
+    # Draws the health bar at the bottom left
+    x = HEALTH_BAR_MARGIN
+    y = surface.get_height() - HEALTH_BAR_HEIGHT - HEALTH_BAR_MARGIN
+    # Background (empty bar)
+    pygame.draw.rect(surface, HEALTH_BAR_BG, (x, y, HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT), border_radius=8)
+    # Foreground (current health)
+    health_width = int(HEALTH_BAR_WIDTH * max(0, health) / MAX_HEALTH)
+    if health_width > 0:
+        pygame.draw.rect(surface, HEALTH_BAR_COLOR, (x, y, health_width, HEALTH_BAR_HEIGHT), border_radius=8)
+
 running = True
 while running:
 
-    # --- Game over if orb collides with player (world coordinates, visually fair) ---
+    # --- Health bar and orb collision logic ---
     player.rect.topleft = (int(player.x), int(player.y))
-    # Slightly increase player hitbox size for more forgiving collision
     player_hitbox = pygame.Rect(
         player.x + player.rect.width // 2 + HITBOX_OFFSET_X - 2,
         player.y + player.rect.height // 2 + HITBOX_OFFSET_Y - 2,
         5, 5
     )
     debug_log(f"[PLAYER] Location: x={player.x:.2f}, y={player.y:.2f}, screen=({screen.get_width()}x{screen.get_height()})")
+    # Only reduce health once per orb hit, and only if not already in invulnerable state
+    orb_hit = False
     for orb in orb_projectiles:
         orb.rect.topleft = (int(orb.x), int(orb.y))
         orb_hitbox = pygame.Rect(
@@ -343,7 +367,15 @@ while running:
         )
         debug_log(f"[ORB] Location: x={orb.x:.2f}, y={orb.y:.2f}")
         if player_hitbox.colliderect(orb_hitbox):
-            debug_log(f"[COLLISION] Player defeated by orb at ({orb.x:.2f}, {orb.y:.2f}) | Player at ({player.x:.2f}, {player.y:.2f}) [WORLD COORDS]")
+            orb_hit = True
+            break
+    # Only reduce health if an orb hit is detected and player was not already hit in the previous frame
+    if not hasattr(player, 'was_hit_last_frame'):
+        player.was_hit_last_frame = False
+    if orb_hit and not player.was_hit_last_frame:
+        player.health -= 10
+        player.health = max(0, player.health)
+        if player.health <= 0:
             font = pygame.font.SysFont('Arial', 64, bold=True)
             text = font.render('GAME OVER', True, (255, 0, 0))
             text_rect = text.get_rect(center=(screen.get_width()//2, screen.get_height()//2))
@@ -352,6 +384,7 @@ while running:
             pygame.time.wait(2000)
             show_splash()
             os.execv(sys.executable, ['python3'] + sys.argv)
+    player.was_hit_last_frame = orb_hit
     # --- Disc defeats orbs: pass through and remove orb ---
     for disc in sword_projectiles:
         if not disc.active:
@@ -487,12 +520,10 @@ while running:
         if key not in enemies:
             del enemy_orb_timers[key]
 
+
     # Draw infinite world centered on player, with enemies and blood overlays
     draw_world(screen, player, enemies)
-    # Draw player on top (centered)
 
-    # Draw world and player with camera offset
-    draw_world(screen, player, enemies)
     # Draw player centered on screen
     player_screen_x = screen.get_width() // 2
     player_screen_y = screen.get_height() // 2
@@ -506,6 +537,10 @@ while running:
         }[player.sword_dir]
         sword_rect = pygame.Rect(player_screen_x + offset[0], player_screen_y + offset[1], player.TILE_SIZE, player.TILE_SIZE)
         screen.blit(player.sword_images[player.sword_dir], sword_rect)
+
+    # Draw health bar
+    draw_health_bar(screen, player.health)
+
     pygame.display.flip()
     clock.tick(60)
 
