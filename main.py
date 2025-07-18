@@ -1,3 +1,8 @@
+DEBUG = False  # Set to True to enable debug logging
+
+def debug_log(*args, **kwargs):
+    if DEBUG:
+        print(*args, **kwargs)
 
 import sys
 import os
@@ -6,6 +11,9 @@ from src.player import Player
 from src.world import World, TILE_GRASS, TILE_WATER
 from src.enemy import Enemy
 
+
+HITBOX_OFFSET_X = 16  # pixels to the right for visual fairness
+HITBOX_OFFSET_Y = 8   # pixels down for visual fairness
 
 # --- SwordProjectile (Disc) ---
 class SwordProjectile:
@@ -80,12 +88,13 @@ class OrbProjectile:
         self.rect = pygame.Rect(self.x, self.y, self.TILE_SIZE, self.TILE_SIZE)
         self.active = True
     def move(self):
-        px = self.player_ref.x + self.player_ref.rect.width // 2
-        py = self.player_ref.y + self.player_ref.rect.height // 2
-        cx = self.x + self.TILE_SIZE // 2
-        cy = self.y + self.TILE_SIZE // 2
-        dx = px - cx
-        dy = py - cy
+        # Move toward the player's world center, with rightward offset for fairness
+        player_center_x = self.player_ref.x + self.player_ref.rect.width // 2 + HITBOX_OFFSET_X
+        player_center_y = self.player_ref.y + self.player_ref.rect.height // 2 + HITBOX_OFFSET_Y
+        orb_center_x = self.x + self.TILE_SIZE // 2
+        orb_center_y = self.y + self.TILE_SIZE // 2
+        dx = player_center_x - orb_center_x
+        dy = player_center_y - orb_center_y
         dist = (dx ** 2 + dy ** 2) ** 0.5
         if dist > 1e-2:
             self.x += self.SPEED * dx / dist
@@ -110,18 +119,18 @@ class Blood:
         # Use project root as base directory
         project_root = os.path.dirname(os.path.abspath(__file__))
         sprite_path = os.path.join(project_root, 'assets', 'sprites', 'blood.png')
-        print(f"[DEBUG] Looking for blood.png at: {sprite_path}")
+        debug_log(f"[DEBUG] Looking for blood.png at: {sprite_path}")
         if os.path.exists(sprite_path):
-            print("[DEBUG] blood.png found.")
+            debug_log("[DEBUG] blood.png found.")
             try:
                 img = pygame.image.load(sprite_path).convert_alpha()
                 self.image = pygame.transform.smoothscale(img, (self.TILE_SIZE, self.TILE_SIZE))
             except Exception as e:
-                print(f"[WARNING] Failed to load blood.png: {e}")
+                debug_log(f"[WARNING] Failed to load blood.png: {e}")
                 self.image = pygame.Surface((self.TILE_SIZE, self.TILE_SIZE), pygame.SRCALPHA)
                 self.image.fill((200, 0, 0))
         else:
-            print("[WARNING] blood.png not found in assets/sprites! Using fallback red tile.")
+            debug_log("[WARNING] blood.png not found in assets/sprites! Using fallback red tile.")
             self.image = pygame.Surface((self.TILE_SIZE, self.TILE_SIZE), pygame.SRCALPHA)
             self.image.fill((200, 0, 0))
         self.rect = self.image.get_rect()
@@ -316,11 +325,25 @@ SPAWN_CHANCE = 0.01  # Chance per frame to spawn an enemy in view
 running = True
 while running:
 
-    # --- Game over if orb touches player (distance-based) ---
-    # --- Game over if orb collides with player (bounding box, world coords) ---
-    player.rect.topleft = (player.x, player.y)
+    # --- Game over if orb collides with player (world coordinates, visually fair) ---
+    player.rect.topleft = (int(player.x), int(player.y))
+    # Slightly increase player hitbox size for more forgiving collision
+    player_hitbox = pygame.Rect(
+        player.x + player.rect.width // 2 + HITBOX_OFFSET_X - 2,
+        player.y + player.rect.height // 2 + HITBOX_OFFSET_Y - 2,
+        5, 5
+    )
+    debug_log(f"[PLAYER] Location: x={player.x:.2f}, y={player.y:.2f}, screen=({screen.get_width()}x{screen.get_height()})")
     for orb in orb_projectiles:
-        if orb.rect.colliderect(player.rect):
+        orb.rect.topleft = (int(orb.x), int(orb.y))
+        orb_hitbox = pygame.Rect(
+            orb.x + orb.rect.width // 2,
+            orb.y + orb.rect.height // 2,
+            1, 1
+        )
+        debug_log(f"[ORB] Location: x={orb.x:.2f}, y={orb.y:.2f}")
+        if player_hitbox.colliderect(orb_hitbox):
+            debug_log(f"[COLLISION] Player defeated by orb at ({orb.x:.2f}, {orb.y:.2f}) | Player at ({player.x:.2f}, {player.y:.2f}) [WORLD COORDS]")
             font = pygame.font.SysFont('Arial', 64, bold=True)
             text = font.render('GAME OVER', True, (255, 0, 0))
             text_rect = text.get_rect(center=(screen.get_width()//2, screen.get_height()//2))
@@ -349,7 +372,7 @@ while running:
                 blood_overlays.append(Blood(wx, wy))
                 del enemies[(wx, wy)]
     for event in pygame.event.get():
-        print(f"[EVENT] type={event.type} key={getattr(event, 'key', None)}")
+        debug_log(f"[EVENT] type={event.type} key={getattr(event, 'key', None)}")
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_x:
@@ -362,7 +385,7 @@ while running:
             down = keys[pygame.K_DOWN] or keys[pygame.K_s]
             xfire = keys[pygame.K_x]
             # Log for debugging
-            print(f"[DISC TOSS] xfire={xfire} right={right} left={left} up={up} down={down}")
+            debug_log(f"[DISC TOSS] xfire={xfire} right={right} left={left} up={up} down={down}")
             if right and not left:
                 dx = 1
             if left and not right:
@@ -376,13 +399,13 @@ while running:
                 dx *= 0.7071
                 dy *= 0.7071
             # Logging for debugging
-            print(f"[DISC TOSS] Keys: right={right}, left={left}, up={up}, down={down} | dx={dx}, dy={dy}")
+            debug_log(f"[DISC TOSS] Keys: right={right}, left={left}, up={up}, down={down} | dx={dx}, dy={dy}")
             if dx == 0 and dy == 0:
                 # No direction pressed, use last_dir
                 dir = player.last_dir
                 dir_map = {'right': (1, 0), 'left': (-1, 0), 'up': (0, -1), 'down': (0, 1)}
                 dx, dy = dir_map.get(dir, (1, 0))
-                print(f"[DISC TOSS] No direction pressed, using last_dir={dir} -> dx={dx}, dy={dy}")
+                debug_log(f"[DISC TOSS] No direction pressed, using last_dir={dir} -> dx={dx}, dy={dy}")
             # Only update last_dir if a single cardinal direction is pressed
             if (dx == 1 and dy == 0):
                 player.last_dir = 'right'
@@ -392,7 +415,7 @@ while running:
                 player.last_dir = 'up'
             elif (dx == 0 and dy == 1):
                 player.last_dir = 'down'
-            print(f"[DISC TOSS] Final direction: ({dx}, {dy})")
+            debug_log(f"[DISC TOSS] Final direction: ({dx}, {dy})")
             # Start projectile at center of player
             px_center = player.x + player.rect.width // 2 - TILE_SIZE // 2
             py_center = player.y + player.rect.height // 2 - TILE_SIZE // 2

@@ -38,7 +38,8 @@ class World:
         # Debug: count water tiles
         water_count = sum(row.count(TILE_WATER) for row in grid)
         grass_count = sum(row.count(TILE_GRASS) for row in grid)
-        print(f"[DEBUG] Chunk ({cx},{cy}) water tiles: {water_count}, grass tiles: {grass_count}")
+        from main import debug_log
+        debug_log(f"[DEBUG] Chunk ({cx},{cy}) water tiles: {water_count}, grass tiles: {grass_count}")
         return grid
 
     def get_tile(self, wx, wy):
